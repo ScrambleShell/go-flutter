@@ -13,7 +13,18 @@ type textModel struct {
 	notifyState     func()
 }
 
+type argsEditingState struct {
+	Text                   string `json:"text"`
+	SelectionBase          int    `json:"selectionBase"`
+	SelectionExtent        int    `json:"selectionExtent"`
+	SelectionAffinity      string `json:"selectionAffinity"`
+	SelectionIsDirectional bool   `json:"selectionIsDirectional"`
+	ComposingBase          int    `json:"composingBase"`
+	ComposingExtent        int    `json:"composingExtent"`
+}
+
 // Modifier keys from glfw
+// TODO: use glfw.ModifierKey's (can be &-ed together for combination keys)
 const (
 	ModNone         int = 0
 	ModShift        int = 1

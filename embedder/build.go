@@ -18,8 +18,3 @@ package embedder
 
 */
 import "C"
-
-import (
-	// prevents dep from stripping out the c source files in flutter library.
-	_ "github.com/go-flutter-desktop/go-flutter/embedder/library"
-)

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:flutter/foundation.dart'
-    show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -40,8 +39,6 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-
-
   static MethodChannel _channel = new MethodChannel('plugin_demo', new JSONMethodCodec());
   Future GetVersion() async {
     var res = await _channel.invokeMethod('getNumber');
@@ -51,12 +48,11 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-
   int _counter = 0;
   bool _ok = false;
   String _submittedMsg = "nothing yet";
   FocusNode myFocus = FocusNode();
-  
+
   void _incrementCounter() {
     setState(() {
       _counter++;
@@ -96,6 +92,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     setState(() {
                       _submittedMsg = value;
                     });
+                    _channel.invokeMethod(
+                      "print",
+                      {
+                        "textfield": value,
+                        "number": _counter,
+                      },
+                    );
                   },
                   onEditingComplete: () => FocusScope.of(context).requestFocus(myFocus),
                 ),

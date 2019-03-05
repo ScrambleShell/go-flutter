@@ -7,7 +7,6 @@ package embedder
 // void setArrayString(char **a, char *s, int n);
 import "C"
 import (
-	"encoding/json"
 	"sync"
 	"unsafe"
 )
@@ -34,6 +33,7 @@ func CountFlutterEngines() int {
 type Result int32
 
 // Values representing the status of an Result.
+// TODO: rename with type, e.g. ResultSuccess
 const (
 	KSuccess               Result = C.kSuccess
 	KInvalidLibraryVersion Result = C.kInvalidLibraryVersion
@@ -56,7 +56,7 @@ type FlutterEngine struct {
 	FMakeResourceCurrent func(v unsafe.Pointer) bool
 
 	// platform message callback.
-	FPlatfromMessage func(message *PlatformMessage, window unsafe.Pointer) bool
+	FPlatfromMessage func(message *PlatformMessage)
 
 	// Engine arguments
 	AssetsPath  string
@@ -118,6 +118,7 @@ func (flu *FlutterEngine) Shutdown() Result {
 type PointerPhase int32
 
 // Values representing the mouse phase.
+// TODO: rename with type, e.g. PointerPhaseCancel
 const (
 	KCancel PointerPhase = C.kCancel
 	KUp     PointerPhase = C.kUp
@@ -156,9 +157,9 @@ type WindowMetricsEvent struct {
 	PixelRatio float64
 }
 
-// SendWindowMetricsEvent is used to send a WindowMetricsEvent to the Flutter Engine.
+// SendWindowMetricsEvent is used to send a WindowMetricsEvent to the Flutter
+// Engine.
 func (flu *FlutterEngine) SendWindowMetricsEvent(Metric WindowMetricsEvent) Result {
-
 	cMetric := C.FlutterWindowMetricsEvent{
 		width:       C.size_t(Metric.Width),
 		height:      C.size_t(Metric.Height),
@@ -171,35 +172,32 @@ func (flu *FlutterEngine) SendWindowMetricsEvent(Metric WindowMetricsEvent) Resu
 	return (Result)(res)
 }
 
-// PlatformMessage represents a `MethodChannel` serialized with the `JSONMethodCodec`
-// TODO Support for `StandardMethodCodec`
+// PlatformMessage represents a binary message sent from or to the flutter
+// application.
 type PlatformMessage struct {
-	Channel        string
-	Message        Message
-	ResponseHandle *C.FlutterPlatformMessageResponseHandle
+	Channel string
+	Message []byte
+
+	// ResponseHandle is only set when receiving a platform message.
+	ResponseHandle PlatformMessageResponseHandle
 }
 
-// Message is the json content of a PlatformMessage
-type Message struct {
-	// Describe the method
-	Method string `json:"method"`
-	// Actual datas
-	Args json.RawMessage `json:"args"`
+type PlatformMessageResponseHandle struct {
+	cHandle *C.FlutterPlatformMessageResponseHandle
+}
+
+func (p PlatformMessage) ExpectsReply() bool {
+	return p.ResponseHandle.cHandle != nil
 }
 
 // SendPlatformMessage is used to send a PlatformMessage to the Flutter engine.
-func (flu *FlutterEngine) SendPlatformMessage(Message *PlatformMessage) Result {
-
-	marshalled, err := json.Marshal(&Message.Message)
-	if err != nil {
-		panic("Cound not send a message to the flutter engine: Error while creating the JSON")
-	}
-	strMessage := string(marshalled)
-
+func (flu *FlutterEngine) SendPlatformMessage(msg *PlatformMessage) Result {
 	cPlatformMessage := C.FlutterPlatformMessage{
-		channel:      C.CString(Message.Channel),
-		message:      (*C.uint8_t)(unsafe.Pointer(C.CString(strMessage))),
-		message_size: C.size_t(len(strMessage)),
+		channel: C.CString(msg.Channel),
+		// TODO: who is responsible for free-ing this C alloc? And can they be
+		// freed when this call returns? Or are they stil used at that time?
+		message:      (*C.uint8_t)(C.CBytes(msg.Message)),
+		message_size: C.size_t(len(msg.Message)),
 	}
 
 	cPlatformMessage.struct_size = C.size_t(unsafe.Sizeof(cPlatformMessage))
@@ -212,23 +210,27 @@ func (flu *FlutterEngine) SendPlatformMessage(Message *PlatformMessage) Result {
 	return (Result)(res)
 }
 
-// SendPlatformMessageResponse is used to send a message to the Flutter side using the correct ResponseHandle!
+// SendPlatformMessageResponse is used to send a message to the Flutter side
+// using the correct ResponseHandle.
 func (flu *FlutterEngine) SendPlatformMessageResponse(
-	responseTo *PlatformMessage,
-	data []byte,
+	responseTo PlatformMessageResponseHandle,
+	encodedMessage []byte,
 ) Result {
-
 	res := C.FlutterEngineSendPlatformMessageResponse(
 		flu.Engine,
-		(*C.FlutterPlatformMessageResponseHandle)(responseTo.ResponseHandle),
-		(*C.uint8_t)(unsafe.Pointer(C.CBytes(data))),
-		(C.size_t)(len(data)))
+		(*C.FlutterPlatformMessageResponseHandle)(responseTo.cHandle),
+		// TODO: who is responsible for free-ing this C alloc? And can they be
+		// freed when this call returns? Or are they stil used at that time?
+		(*C.uint8_t)(C.CBytes(encodedMessage)),
+		(C.size_t)(len(encodedMessage)),
+	)
 
 	return (Result)(res)
-
 }
 
-// FlutterEngineFlushPendingTasksNow flush tasks on a  message loop not controlled by the Flutter engine.
+// FlutterEngineFlushPendingTasksNow flush tasks on a  message loop not
+// controlled by the Flutter engine.
+//
 // deprecated soon.
 func FlutterEngineFlushPendingTasksNow() {
 	C.__FlutterEngineFlushPendingTasksNow()

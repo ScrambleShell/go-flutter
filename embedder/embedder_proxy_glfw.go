@@ -9,7 +9,6 @@ static char *c_str(uint8_t *str){
 */
 import "C"
 import (
-	"encoding/json"
 	"unsafe"
 
 	"github.com/go-gl/glfw/v3.2/glfw"
@@ -17,24 +16,19 @@ import (
 
 // C proxies
 
-//export proxy_on_platform_message
-func proxy_on_platform_message(message *C.FlutterPlatformMessage, window unsafe.Pointer) C.bool {
-	if message.message != nil {
-		str := C.GoStringN(C.c_str(message.message), C.int(message.message_size))
+//export proxy_platform_message_callback
+func proxy_platform_message_callback(message *C.FlutterPlatformMessage, window unsafe.Pointer) {
+	msg := &PlatformMessage{
+		Channel: C.GoString(message.channel),
+		Message: C.GoBytes(unsafe.Pointer(message.message), C.int(message.message_size)),
 
-		messageContent := Message{}
-		json.Unmarshal([]byte(str), &messageContent)
-
-		FlutterPlatformMessage := &PlatformMessage{
-			Message:        messageContent,
-			Channel:        C.GoString(message.channel),
-			ResponseHandle: message.response_handle,
-		}
-		index := *(*int)(glfw.GoWindow(window).GetUserPointer())
-		flutterEngine := FlutterEngineByIndex(index)
-		return C.bool(flutterEngine.FPlatfromMessage(FlutterPlatformMessage, window))
+		ResponseHandle: PlatformMessageResponseHandle{
+			cHandle: message.response_handle,
+		},
 	}
-	return C.bool(false)
+	index := *(*int)(glfw.GoWindow(window).GetUserPointer())
+	flutterEngine := FlutterEngineByIndex(index)
+	flutterEngine.FPlatfromMessage(msg)
 }
 
 //export proxy_make_current
